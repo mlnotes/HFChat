@@ -57,9 +57,9 @@ class MessageBuffer(object):
 
 			else:
 				# send message to mailbox
-				self.r.lpush(mid, msg)
+				self.r.rpush(mid, msg)
 				if self.r.llen(mid) > self.cache_size:
-					self.r.rpop()
+					self.r.lpop()
 
 			# store recent contacts into user's set
 			self.r.sadd("U#%s" % msg['from'], msg['to'])
