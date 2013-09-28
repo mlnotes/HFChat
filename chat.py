@@ -3,6 +3,7 @@ import tornado.web
 import time
 import logging
 import redis
+import cgi
 import os
 
 from tornado.options import define, options
@@ -39,7 +40,8 @@ class MessageBuffer(object):
 
 	def cancel_wait(self, uid):
 		mid = self.get_mailbox_id(uid)
-		del self.waiters[mid]
+		if mid in self.waiters:
+			del self.waiters[mid]
 
 	def new_messages(self, messages):
 		for msg in messages:
@@ -83,7 +85,7 @@ class MessageNewHandler(BaseHandler):
 			"id": time.time(),
 			"from": self.get_current_user(), 
 			"to": self.get_argument("to"),
-			"body": self.get_argument("body")
+			"body": cgi.escape(self.get_argument("body"))
 		}
 
 		self.write({"id": message["id"]})
