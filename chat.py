@@ -88,7 +88,8 @@ class MessageNewHandler(BaseHandler):
 			"body": cgi.escape(self.get_argument("body"))
 		}
 
-		self.write({"id": message["id"]})
+#		self.write({"id": message["id"]})
+		self.write(message)
 		global_message_buffer.new_messages([message])
 		
 
