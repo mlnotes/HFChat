@@ -6,4 +6,4 @@ install:
   - "pip install tornado"
   - "pip install redis"
 # command to run tests, e.g. python setup.py test
-# script:  PLEASE CHANGE ME
+script: python chat.py
