@@ -15,24 +15,35 @@ define("port", default=8888, help="run on the given port", type=int)
 class MessageBuffer(object):
 	def __init__(self):
 		self.waiters = {}
-		self.cache_size = 100
+		self.cache_size = 20
 		self.r = redis.Redis("localhost", 6379)
 
 	def get_mailbox_id(slef, uid):
 		mid = "TO#%s" % uid
 		return mid
 
-	def wait_for_messages(self, uid, callback):
+	def wait_for_messages(self, uid, callback, cursor):
 		mid = self.get_mailbox_id(uid)
 		msg_count = self.r.llen(mid)
+		msgs = None
 
-		if msg_count > 0:
-			msgs = self.r.lrange(mid, 0, self.cache_size)
+		
+		if cursor:
+			new_count = 0
+			for i in range(msg_count-1, -1, -1):
+				msg = eval(self.r.lindex(mid, i))
+				if str(msg["id"]) == cursor: break
+				new_count += 1
+			if new_count:
+				msgs = self.r.lrange(mid, msg_count-new_count, msg_count-1)
+
+		elif msg_count > 0:
+			msgs = self.r.lrange(mid, 0, msg_count)
+
+		if msgs:
 			for i in range(len(msgs)):
 				msgs[i] = eval(msgs[i])	
 			callback(msgs)
-			
-			self.r.delete(mid)
 			return
 
 		# currently, no new message, so just wait
@@ -57,11 +68,10 @@ class MessageBuffer(object):
 			
 				del self.waiters[mid]
 
-			else:
-				# send message to mailbox
-				self.r.rpush(mid, msg)
-				if self.r.llen(mid) > self.cache_size:
-					self.r.lpop()
+			# send message to mailbox
+			self.r.rpush(mid, msg)
+			if self.r.llen(mid) > self.cache_size:
+				self.r.lpop(mid)
 
 			# store recent contacts into user's set
 			self.r.sadd("U#%s" % msg['from'], msg['to'])
@@ -82,7 +92,7 @@ class Chat(tornado.web.RequestHandler):
 class MessageNewHandler(BaseHandler):
 	def post(self):
 		message = {
-			"id": time.time(),
+			"id": str(time.time()),
 			"from": self.get_current_user(), 
 			"to": self.get_argument("to"),
 			"body": cgi.escape(self.get_argument("body"))
@@ -96,9 +106,11 @@ class MessageNewHandler(BaseHandler):
 class MessageUpdatesHandler(BaseHandler):
 	@tornado.web.asynchronous
 	def post(self):
+		cursor = self.get_argument("cursor", None)
 		global_message_buffer.wait_for_messages(
 			self.get_current_user(),
-			self.on_new_messages)
+			self.on_new_messages,
+			cursor)
 
 	def on_new_messages(self, messages):
 		if self.request.connection.stream.closed():
