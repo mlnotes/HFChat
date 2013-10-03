@@ -43,11 +43,12 @@ class MessageBuffer(object):
 		if msgs:
 			for i in range(len(msgs)):
 				msgs[i] = eval(msgs[i])	
+			
 			callback(msgs)
 			return
 
 		# currently, no new message, so just wait
-		self.waiters[mid] = callback
+		self.waiters.setdefault(mid, set()).add(callback)
 
 	def cancel_wait(self, uid):
 		mid = self.get_mailbox_id(uid)
@@ -60,11 +61,11 @@ class MessageBuffer(object):
 			
 			if mid in self.waiters:
 				# send new messages to corresponding users
-				callback = self.waiters[mid]
-				try:
-					callback(messages)	
-				except:
-					logging.error("Error in waiter callback", exc_info=True)
+				for callback in self.waiters[mid]:
+					try:
+						callback(messages)	
+					except:
+						logging.error("Error in waiter callback", exc_info=True)
 			
 				del self.waiters[mid]
 
